@@ -1,0 +1,7 @@
+venv/
+.venv/
+__pycache__/
+.env
+*.db
+.antigravityignore
+.DS_Store
