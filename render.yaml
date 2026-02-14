@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: riko-ai-backend
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn server:app --bind 0.0.0.0:$PORT --workers 2 --worker-class uvicorn.workers.UvicornWorker --timeout 120"
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        value: ""
+      - key: SUPABASE_KEY
+        value: ""
+      - key: PYTHON_VERSION
+        value: "3.11"

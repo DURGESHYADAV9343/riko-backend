@@ -94,6 +94,43 @@ RULES for actions:
 {memory_context}
 """
 
+
+class ModelManager:
+    def __init__(self):
+        self.models = [
+            "llama-3.1-8b-instant",    # Primary: Fast & Cheap
+            "mixtral-8x7b-32768",      # Secondary: Robust & Smart
+            "gemma-7b-it",             # Tertiary: Reliable Fallback
+        ]
+
+    def chat_completion(self, client, messages, temperature=0.7, max_tokens=1024):
+        last_error = None
+        
+        for model in self.models:
+            try:
+                print(f"🧠 Trying model: {model}...")
+                completion = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                return completion.choices[0].message.content
+            except Exception as e:
+                error_msg = str(e)
+                print(f"❌ Model {model} failed: {error_msg}")
+                last_error = e
+                # If it's an auth error (401), don't retry other models
+                if "401" in error_msg:
+                    raise e
+                continue  # Try next model automatically
+        
+        # If all failed
+        raise last_error
+
+model_manager = ModelManager()
+
+
 def get_groq_client(api_key: str = None):
     """Get or create Groq client."""
     global groq_client
@@ -204,41 +241,6 @@ def _check_ai_memory_storage(ai_response: str, user_message: str):
             )
             break
 
-
-class ModelManager:
-    def __init__(self):
-        self.models = [
-            "llama-3.1-8b-instant",    # Primary: Fast & Cheap
-            "mixtral-8x7b-32768",      # Secondary: Robust & Smart
-            "gemma-7b-it",             # Tertiary: Reliable Fallback
-        ]
-
-    def chat_completion(self, client, messages, temperature=0.7, max_tokens=1024):
-        last_error = None
-        
-        for model in self.models:
-            try:
-                print(f"🧠 Trying model: {model}...")
-                completion = client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
-                return completion.choices[0].message.content
-            except Exception as e:
-                error_msg = str(e)
-                print(f"❌ Model {model} failed: {error_msg}")
-                last_error = e
-                # If it's an auth error (401), don't retry other models
-                if "401" in error_msg:
-                    raise e
-                continue  # Try next model automatically
-        
-        # If all failed
-        raise last_error
-
-model_manager = ModelManager()
 
 @app.post("/api/key")
 async def set_api_key(request: ApiKeyRequest):
