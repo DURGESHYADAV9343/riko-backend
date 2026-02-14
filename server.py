@@ -7,7 +7,7 @@ import json
 from datetime import datetime
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -144,12 +144,24 @@ def get_groq_client(api_key: str = None):
     try:
         from groq import Groq
         groq_client = Groq(api_key=key)
-        # Save key to .env
+        
+        # Save key to .env - PRESERVE existing values
         env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+        existing_env = {}
+        if os.path.exists(env_path):
+            with open(env_path, "r") as f:
+                for line in f:
+                    line = line.strip()
+                    if "=" in line and not line.startswith("#"):
+                        k, v = line.split("=", 1)
+                        existing_env[k.strip()] = v.strip()
+        
+        existing_env["GROQ_API_KEY"] = key
+        
         with open(env_path, "w") as f:
-            f.write(f"GROQ_API_KEY={key}\n")
-            f.write(f"SUPABASE_URL=\"\"\n")
-            f.write(f"SUPABASE_KEY=\"\"\n")
+            for k, v in existing_env.items():
+                f.write(f"{k}={v}\n")
+        
         return groq_client
     except Exception as e:
         print(f"Groq init error: {e}")
@@ -166,7 +178,7 @@ class ApiKeyRequest(BaseModel):
 
 
 @app.post("/api/chat")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, background_tasks: BackgroundTasks):
     """Process a chat message and return AI response in Hindi."""
     client = get_groq_client(request.api_key)
     if not client:
@@ -200,10 +212,11 @@ async def chat(request: ChatRequest):
         
         # Store in memory (Local + Cloud)
         memory.add_message("user", request.message)
-        supabase_manager.save_message("user", request.message)
+        # Run Supabase inserts in background
+        background_tasks.add_task(supabase_manager.save_message, "user", request.message)
         
         memory.add_message("assistant", ai_response)
-        supabase_manager.save_message("assistant", ai_response)
+        background_tasks.add_task(supabase_manager.save_message, "assistant", ai_response)
         
         return {
             "response": ai_response,
